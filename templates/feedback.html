@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback - Voice Conversation Coach</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .feedback-content {
+            white-space: normal !important;
+            text-align: left;
+            line-height: 1.8;
+        }
+        
+        .feedback-content h3,
+        .feedback-content strong {
+            color: #818cf8;
+            font-size: 1.2rem;
+            margin: 25px 0 15px 0;
+            display: block;
+            font-weight: 600;
+        }
+        
+        .feedback-content h3:first-child,
+        .feedback-content strong:first-child {
+            margin-top: 0;
+        }
+        
+        .feedback-content ul {
+            list-style: none;
+            padding: 0;
+            margin: 15px 0;
+        }
+        
+        .feedback-content li {
+            padding: 10px 0 10px 30px;
+            position: relative;
+            color: #cbd5e1;
+            line-height: 1.6;
+        }
+        
+        .feedback-content li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #818cf8;
+            font-weight: bold;
+        }
+        
+        .feedback-content p {
+            margin-bottom: 15px;
+            color: #cbd5e1;
+        }
+        
+        .turn-info {
+            color: var(--gray);
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        /* Different colors for different sections */
+        .feedback-content strong:nth-of-type(1) { color: #10b981; } /* Strengths - Green */
+        .feedback-content strong:nth-of-type(2) { color: #f59e0b; } /* Improvement - Orange */
+        .feedback-content strong:nth-of-type(3) { color: #818cf8; } /* Flow - Blue */
+        .feedback-content strong:nth-of-type(4) { color: #8b5cf6; } /* Takeaways - Purple */
+        .feedback-content strong:nth-of-type(5) { color: #06b6d4; } /* Next Steps - Cyan */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-microphone-alt"></i>
+                <h1>ARTICOON</h1>
+            </div>
+            <p class="tagline">Align your thoughts. Articulate your words.</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="feedback-container">
+                <div class="feedback-header">
+                    <i class="fas fa-clipboard-check"></i>
+                    <h2>Your Conversation Analysis</h2>
+                    <p class="turn-info">Total Turns: {{ total_turns }}</p>
+                </div>
+                
+                <div class="feedback-content" id="feedback-content">
+                    <!-- Feedback will be parsed and displayed here -->
+                </div>
+                
+                <div class="feedback-actions">
+                    <button id="restart-btn" class="btn btn-primary btn-large">
+                        <i class="fas fa-redo"></i>
+                        Practice Again
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Get the raw feedback text
+        const rawFeedback = `{{ analysis | safe }}`.trim();
+        
+        // Parse markdown-style formatting
+        function parseAndDisplayFeedback(text) {
+            const container = document.getElementById('feedback-content');
+            
+            // Replace **TEXT:** with proper headers
+            let formatted = text.replace(/\*\*([^*]+):\*\*/g, '<strong>$1:</strong>');
+            
+            // Split by lines
+            const lines = formatted.split('\n');
+            let html = '';
+            let inList = false;
+            
+            for (let line of lines) {
+                line = line.trim();
+                
+                if (!line) {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    continue;
+                }
+                
+                // Check if it's a header
+                if (line.startsWith('<strong>')) {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    html += `<h3>${line}</h3>`;
+                }
+                // Check if it's a bullet point
+                else if (line.startsWith('-') || line.startsWith('•')) {
+                    if (!inList) {
+                        html += '<ul>';
+                        inList = true;
+                    }
+                    // Remove the dash/bullet and trim
+                    const content = line.substring(1).trim();
+                    html += `<li>${content}</li>`;
+                }
+                // Regular paragraph
+                else {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    html += `<p>${line}</p>`;
+                }
+            }
+            
+            if (inList) {
+                html += '</ul>';
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        // Display the formatted feedback
+        parseAndDisplayFeedback(rawFeedback);
+        
+        // Restart button
+        const restartBtn = document.getElementById('restart-btn');
+        restartBtn.onclick = () => {
+            // Clean up any lingering speech
+            if (speechSynthesis.speaking) {
+                speechSynthesis.cancel();
+            }
+            window.location.href = '/';
+        };
+    </script>
+</body>
+</html>

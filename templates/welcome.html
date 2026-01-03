@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎙️ Voice Conversation Coach</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-microphone-alt"></i>
+                <h1>ARTICOON</h1>
+            </div>
+            <p class="tagline">Practice your conversation skills with AI</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="welcome-card">
+                <div class="welcome-icon">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <h2>Polish your Charm with Articoon</h2>
+                <p>Have a natural conversation with our AI partner. Have a talk for about 5 minutes 
+                   and receive a personalized feedback to improve your communication skills.</p>
+                
+                <div class="features">
+                    <div class="feature">
+                        <i class="fas fa-ear-listen"></i>
+                        <span>Active Listening</span>
+                    </div>
+                    <div class="feature">
+                        <i class="fas fa-brain"></i>
+                        <span>Smart Responses</span>
+                    </div>
+                    <div class="feature">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Detailed Feedback</span>
+                    </div>
+                </div>
+                
+                <button id="start-btn" class="btn btn-primary btn-large">
+                    <i class="fas fa-play"></i>
+                    Start Conversation
+                </button>
+            </div>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay">
+            <div class="loader">
+                <div class="spinner"></div>
+                <p id="loading-text">Starting conversation...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('start-btn');
+        const loadingOverlay = document.getElementById('loading-overlay');
+
+        function showLoading() {
+            loadingOverlay.classList.add('active');
+        }
+
+        async function startConversation() {
+            showLoading();
+            try {
+                const res = await fetch('/start_conversation', { method: 'POST' });
+                if (!res.ok) throw new Error('Failed to start conversation');
+
+                const data = await res.json();
+                window.location.href = data.redirect;
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to start conversation. Please try again.');
+                loadingOverlay.classList.remove('active');
+            }
+        }
+
+        startBtn.onclick = startConversation;
+    </script>
+</body>
+</html>

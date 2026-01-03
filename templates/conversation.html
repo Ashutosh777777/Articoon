@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speak your mind!</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <i class="fas fa-microphone-alt"></i>
+                <h1>ARTICOON</h1>
+            </div>
+            <p class="tagline">Speak your mind!</p>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="conversation-container">
+                <!-- Timer -->
+                <div class="timer-section">
+                    <div class="timer" id="timer">
+                        <i class="fas fa-clock"></i>
+                        <span id="timer-display">05:00</span>
+                    </div>
+                    <div class="turn-counter">
+                        Turn: <span id="turn-count">0</span>
+                    </div>
+                </div>
+
+                <!-- Chat Area -->
+                <div class="chat-area" id="chat-area">
+                    <!-- Messages will be added here -->
+                </div>
+
+                <!-- Voice Input Section -->
+                <div class="input-section">
+                    <div class="voice-indicator" id="voice-indicator">
+                        <div class="pulse-ring"></div>
+                        <i class="fas fa-microphone"></i>
+                    </div>
+                    
+                    <div class="listening-status" id="listening-status" style="text-align: center; color: #4dd0e1; margin-bottom: 10px; font-size: 0.9rem;">
+                        <i class="fas fa-microphone"></i>
+                        <span>Listening... Pause for 5 seconds when done speaking</span>
+                    </div>
+                    
+                    <div class="input-controls">
+                        <div class="text-input-wrapper">
+                            <input type="text" id="text-input" placeholder="Or type your message...">
+                            <button id="send-btn" class="btn btn-send">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button id="end-btn" class="btn btn-danger">
+                        <i class="fas fa-stop"></i>
+                        End & Get Feedback
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay">
+            <div class="loader">
+                <div class="spinner"></div>
+                <p id="loading-text">Analyzing...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const conversationId = "{{ conversation_id }}";
+        const chatArea = document.getElementById('chat-area');
+        const textInput = document.getElementById('text-input');
+        const sendBtn = document.getElementById('send-btn');
+        const endBtn = document.getElementById('end-btn');
+        const voiceIndicator = document.getElementById('voice-indicator');
+        const listeningStatus = document.getElementById('listening-status');
+        const timerDisplay = document.getElementById('timer-display');
+        const turnCount = document.getElementById('turn-count');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loadingText = document.getElementById('loading-text');
+
+        let recognition = null;
+        let isListening = false;
+        let timerInterval = null;
+        let timeRemaining = 300;
+        let selectedVoice = null;
+        let voicesReady = false;
+
+        // Silence detection
+        let silenceTimer = null;
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        // ===== Speech Recognition =====
+        function setupSpeechRecognition() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SR();
+                
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+
+                recognition.onstart = () => {
+                    console.log('Recognition started');
+                    isListening = true;
+                    voiceIndicator.classList.add('active');
+                    listeningStatus.innerHTML = '<i class="fas fa-microphone"></i> <span>Listening... Pause for 5 seconds when done</span>';
+                };
+
+                recognition.onresult = (event) => {
+                    clearTimeout(silenceTimer);
+                    
+                    interimTranscript = '';
+                    
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript;
+                        
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript + ' ';
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+
+                    // Start 5-second silence timer
+                    silenceTimer = setTimeout(() => {
+                        console.log('5 seconds of silence detected');
+                        stopListeningAndSend();
+                    }, 5000);
+                };
+
+                recognition.onerror = (event) => {
+                    console.error('Recognition error:', event.error);
+                    if (event.error !== 'no-speech' && event.error !== 'aborted') {
+                        setTimeout(() => {
+                            if (isListening) startListening();
+                        }, 1000);
+                    }
+                };
+
+                recognition.onend = () => {
+                    console.log('Recognition ended');
+                    if (isListening) {
+                        setTimeout(() => {
+                            if (isListening) startListening();
+                        }, 100);
+                    }
+                };
+            } else {
+                alert('Speech recognition not supported. Please use Chrome, Edge, or Safari.');
+            }
+        }
+
+        // ===== Speech Output =====
+        function loadVoices() {
+            const voices = speechSynthesis.getVoices();
+            
+            selectedVoice = 
+                voices.find(v => v.name.includes('Samantha')) ||
+                voices.find(v => v.name.includes('Karen')) ||
+                voices.find(v => v.name.includes('Victoria')) ||
+                voices.find(v => v.name.includes('Joanna')) ||
+                voices.find(v => v.name.includes('Salli')) ||
+                voices.find(v => v.name.includes('Google US English Female')) ||
+                voices.find(v => v.name.includes('Zira')) ||
+                voices.find(v => v.name.includes('Microsoft Zira')) ||
+                voices.find(v => v.name.toLowerCase().includes('female')) ||
+                voices.find(v => v.lang === 'en-US') ||
+                voices[0];
+
+            voicesReady = true;
+            console.log('Selected voice:', selectedVoice?.name);
+        }
+
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = loadVoices;
+        }
+        loadVoices();
+
+        function speak(text, callback) {
+            if (!text) return;
+            
+            stopListening();
+            speechSynthesis.cancel();
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            
+            if (!selectedVoice) loadVoices();
+            if (selectedVoice) utterance.voice = selectedVoice;
+            
+            utterance.rate = 0.95;
+            utterance.pitch = 1.2;
+            utterance.volume = 1.0;
+            utterance.lang = 'en-US';
+            
+            utterance.onend = () => {
+                console.log('AI finished speaking');
+                setTimeout(() => {
+                    startListening();
+                    if (callback) callback();
+                }, 500);
+            };
+            
+            utterance.onerror = () => {
+                setTimeout(() => {
+                    startListening();
+                    if (callback) callback();
+                }, 500);
+            };
+            
+            speechSynthesis.speak(utterance);
+        }
+
+        // ===== Listening Control =====
+        function startListening() {
+            if (!recognition || isListening) return;
+            
+            try {
+                finalTranscript = '';
+                interimTranscript = '';
+                recognition.start();
+            } catch (e) {
+                console.error('Error starting recognition:', e);
+            }
+        }
+
+        function stopListening() {
+            if (!recognition) return;
+            
+            isListening = false;
+            clearTimeout(silenceTimer);
+            
+            try {
+                recognition.stop();
+            } catch (e) {
+                console.error('Error stopping recognition:', e);
+            }
+            
+            voiceIndicator.classList.remove('active');
+            listeningStatus.innerHTML = '<i class="fas fa-volume-up"></i> <span>AI is speaking...</span>';
+        }
+
+        function stopListeningAndSend() {
+            const messageToSend = finalTranscript.trim();
+            
+            stopListening();
+            
+            if (messageToSend) {
+                console.log('Sending message:', messageToSend);
+                sendMessage(messageToSend);
+            } else {
+                console.log('No message to send, resuming listening');
+                setTimeout(() => startListening(), 500);
+            }
+        }
+
+        // ===== Timer =====
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                timeRemaining--;
+                timerDisplay.textContent =
+                    `${String(Math.floor(timeRemaining / 60)).padStart(2, '0')}:${String(timeRemaining % 60).padStart(2, '0')}`;
+                if (timeRemaining <= 0) endConversation();
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
+        // ===== UI =====
+        function addMessage(text, isUser) {
+            const div = document.createElement('div');
+            div.className = `message ${isUser ? 'user' : 'ai'}`;
+            div.textContent = text;
+            chatArea.appendChild(div);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function showLoading() {
+            loadingOverlay.classList.add('active');
+        }
+
+        function hideLoading() {
+            loadingOverlay.classList.remove('active');
+        }
+
+        // ===== API =====
+        async function loadGreeting() {
+            try {
+                let attempts = 0;
+                while (!voicesReady && attempts < 60) {
+                    await new Promise(r => setTimeout(r, 50));
+                    attempts++;
+                }
+                if (!voicesReady) loadVoices();
+
+                const res = await fetch('/get_greeting');
+                if (!res.ok) throw new Error('Failed to load greeting');
+
+                const data = await res.json();
+                addMessage(data.greeting, false);
+                
+                setTimeout(() => {
+                    speak(data.greeting);
+                }, 100);
+            } catch (error) {
+                console.error('Error loading greeting:', error);
+            }
+        }
+
+        async function sendMessage(msg) {
+            if (!msg || !conversationId) return;
+            addMessage(msg, true);
+            textInput.value = '';
+
+            try {
+                const res = await fetch('/send_message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ conversation_id: conversationId, message: msg })
+                });
+
+                const data = await res.json();
+                addMessage(data.response, false);
+                turnCount.textContent = data.turn_count;
+                speak(data.response);
+            } catch (error) {
+                console.error('Error sending message:', error);
+                setTimeout(() => startListening(), 1000);
+            }
+        }
+
+        async function endConversation() {
+            stopTimer();
+            stopListening();
+            
+            // CRITICAL: Stop speech before redirecting
+            speechSynthesis.cancel();
+            
+            showLoading();
+            
+            try {
+                const res = await fetch('/end_conversation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ conversation_id: conversationId })
+                });
+
+                const data = await res.json();
+                
+                // Ensure speech is stopped before navigation
+                speechSynthesis.cancel();
+                
+                window.location.href = data.redirect;
+            } catch (error) {
+                console.error('Error ending conversation:', error);
+                hideLoading();
+            }
+        }
+
+        // ===== Events =====
+        sendBtn.onclick = () => {
+            const msg = textInput.value.trim();
+            if (msg) sendMessage(msg);
+        };
+        
+        endBtn.onclick = endConversation;
+        
+        textInput.onkeypress = (e) => {
+            if (e.key === 'Enter') {
+                const msg = textInput.value.trim();
+                if (msg) sendMessage(msg);
+            }
+        };
+
+        // ===== Initialize =====
+        document.addEventListener('DOMContentLoaded', () => {
+            setupSpeechRecognition();
+            
+            setTimeout(() => {
+                if (!voicesReady) loadVoices();
+                loadGreeting();
+                startTimer();
+            }, 200);
+        });
+
+        // ===== Cleanup on page unload =====
+        window.addEventListener('beforeunload', () => {
+            console.log('Page unloading - stopping speech...');
+            speechSynthesis.cancel();
+            if (recognition) {
+                try {
+                    recognition.stop();
+                } catch (e) {}
+            }
+        });
+
+        window.addEventListener('pagehide', () => {
+            console.log('Page hiding - stopping speech...');
+            speechSynthesis.cancel();
+        });
+    </script>
+</body>
+</html>
