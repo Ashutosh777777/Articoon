@@ -1,16 +1,41 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from openai import OpenAI
 import uuid
+import os
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = 'your-secret-key-change-in-production'
+# Use environment variable for secret key
+app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 
-# Ollama OpenAI-compatible client
-client = OpenAI(
-    base_url="http://localhost:11434/v1",
-    api_key="ollama"
-)
+# Determine which API to use based on environment
+API_PROVIDER = os.environ.get('API_PROVIDER', 'ollama').lower()
+
+if API_PROVIDER == 'groq':
+    # Groq API (for deployment - FREE and FAST!)
+    client = OpenAI(
+        base_url="https://api.groq.com/openai/v1",
+        api_key=os.environ.get('GROQ_API_KEY')
+    )
+    # Updated models as of Jan 2026
+    MODEL = "llama-3.3-70b-versatile"  # Latest and best (recommended)
+    # Alternative models:
+    # "llama-3.1-8b-instant" - Faster, lighter
+    # "mixtral-8x7b-32768" - Good balance
+    # "gemma2-9b-it" - Compact and efficient
+elif API_PROVIDER == 'openai':
+    # OpenAI API (backup option)
+    client = OpenAI(
+        api_key=os.environ.get('OPENAI_API_KEY')
+    )
+    MODEL = "gpt-3.5-turbo"
+else:
+    # Ollama (for local development)
+    client = OpenAI(
+        base_url="http://localhost:11434/v1",
+        api_key="ollama"
+    )
+    MODEL = "llama3.2"
 
 conversations = {}
 
@@ -50,15 +75,15 @@ Use "you" and "your" when addressing the user. Be specific and constructive."""
 def get_ai_response(messages):
     try:
         response = client.chat.completions.create(
-            model="llama3.2",
+            model=MODEL,
             messages=messages,
             temperature=0.8,
             max_tokens=300
         )
         return response.choices[0].message.content
     except Exception as e:
-        print("AI Error:", e)
-        return "I'm having trouble connecting right now."
+        print(f"AI Error ({API_PROVIDER}):", e)
+        return "I'm having trouble connecting right now. Please try again."
 
 def analyze_conversation(conversation_history):
     formatted = "\n".join(
@@ -68,18 +93,18 @@ def analyze_conversation(conversation_history):
 
     try:
         response = client.chat.completions.create(
-            model="llama3.2",
+            model=MODEL,
             messages=[
                 {"role": "system", "content": ANALYSIS_PROMPT},
                 {"role": "user", "content": f"Analyze this conversation and provide structured feedback:\n\n{formatted}"}
             ],
             temperature=0.6,
-            max_tokens=1000  # Increased for structured output
+            max_tokens=1000
         )
         return response.choices[0].message.content
     except Exception as e:
-        print("Analysis Error:", e)
-        return "Unable to analyze conversation."
+        print(f"Analysis Error ({API_PROVIDER}):", e)
+        return "Unable to analyze conversation. Please try again."
 
 @app.route('/')
 def index():
@@ -189,5 +214,16 @@ def get_greeting():
         "conversation_id": conversation_id
     })
 
+@app.route('/health')
+def health():
+    """Health check endpoint for Render"""
+    return jsonify({
+        "status": "healthy",
+        "api_provider": API_PROVIDER,
+        "model": MODEL
+    }), 200
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    # For local development
+    port = int(os.environ.get('PORT', 5001))
+    app.run(debug=True, host='0.0.0.0', port=port)

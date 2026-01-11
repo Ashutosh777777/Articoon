@@ -1,2 +1,18 @@
+# Sensitive files
+.env
+
+# Snapshots and videos
 Snaps/
 *.mp4
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
