@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from openai import OpenAI
 import uuid
 import os
 from datetime import datetime
@@ -8,27 +7,44 @@ app = Flask(__name__)
 # Use environment variable for secret key
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 
-# Determine which API to use based on environment
-API_PROVIDER = os.environ.get('API_PROVIDER', 'ollama').lower()
+# Import OpenAI conditionally to avoid issues
+try:
+    from openai import OpenAI
+except ImportError:
+    print("OpenAI library not found. Please install it.")
+    OpenAI = None
+
+# Use environment variable for API choice
+API_PROVIDER = os.environ.get('API_PROVIDER', 'groq').lower()
+
+print(f"Starting with API_PROVIDER: {API_PROVIDER}")
 
 if API_PROVIDER == 'groq':
     # Groq API (for deployment - FREE and FAST!)
+    groq_key = os.environ.get('GROQ_API_KEY')
+    if not groq_key:
+        raise ValueError("GROQ_API_KEY environment variable is required when using Groq")
+    
     client = OpenAI(
         base_url="https://api.groq.com/openai/v1",
-        api_key=os.environ.get('GROQ_API_KEY')
+        api_key=groq_key
     )
     # Updated models as of Jan 2026
     MODEL = "llama-3.3-70b-versatile"  # Latest and best (recommended)
+    print(f"Using Groq with model: {MODEL}")
     # Alternative models:
     # "llama-3.1-8b-instant" - Faster, lighter
     # "mixtral-8x7b-32768" - Good balance
     # "gemma2-9b-it" - Compact and efficient
 elif API_PROVIDER == 'openai':
     # OpenAI API (backup option)
-    client = OpenAI(
-        api_key=os.environ.get('OPENAI_API_KEY')
-    )
+    openai_key = os.environ.get('OPENAI_API_KEY')
+    if not openai_key:
+        raise ValueError("OPENAI_API_KEY environment variable is required when using OpenAI")
+    
+    client = OpenAI(api_key=openai_key)
     MODEL = "gpt-3.5-turbo"
+    print(f"Using OpenAI with model: {MODEL}")
 else:
     # Ollama (for local development)
     client = OpenAI(
@@ -36,6 +52,7 @@ else:
         api_key="ollama"
     )
     MODEL = "llama3.2"
+    print(f"Using Ollama with model: {MODEL}")
 
 conversations = {}
 
